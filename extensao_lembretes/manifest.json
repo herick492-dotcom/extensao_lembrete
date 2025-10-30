@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Lembrete de Tickets",
+  "version": "1.1",
+  "description": "Agenda lembretes e lista tarefas pendentes.",
+  "permissions": [
+    "storage", 
+    "alarms"
+  ],
+  "action": {
+    "default_popup": "popup.html", 
+    "default_icon": "icon.png"
+  },
+  "background": {
+    "service_worker": "background.js" 
+  },
+  "icons": {
+    "128": "icon.png"
+  }
+}

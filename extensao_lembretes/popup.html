@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { 
+      width: 400px; 
+      padding: 15px; 
+      font-family: Arial, sans-serif;
+    }
+    h1{
+      text-align: center;
+      margin-top: 0;
+    }
+    h3 { margin-top: 0; }
+    input[type="text"], input[type="datetime-local"] { 
+      width: calc(100% - 12px); 
+      margin-bottom: 8px; 
+      padding: 5px;
+    }
+    button { 
+      width: 100%; 
+      padding: 8px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover { background-color: #0056b3; }
+    hr { margin: 15px 0; }
+    ul { 
+      list-style: none; 
+      padding-left: 0; 
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    li { 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center;
+      padding: 8px 5px;
+      border-bottom: 1px solid #eee;
+      word-break: break-all;
+    }
+    li .item-content {
+      flex-grow: 1;
+      margin-right: 10px;
+    }
+    li .item-content a {
+      color: #0056b3;
+      font-weight: bold;
+      text-decoration: none;
+    }
+    li .item-content a:hover {
+      text-decoration: underline;
+    }
+    li .item-content span {
+      display: block;
+      font-size: 0.8em;
+      color: #555;
+    }
+    
+    /* --- NOVO: Container para botões de ação --- */
+    li .item-actions {
+      display: flex;
+      align-items: center;
+    }
+    
+    /* Botões na lista (Editar e Concluir) */
+    li button { 
+      width: auto; 
+      background: none;
+      border: none;
+      font-weight: bold;
+      cursor: pointer;
+      padding: 0 5px;
+      font-size: 1.2em;
+    }
+    li button.edit-btn { color: #007bff; }
+    li button.delete-btn { color: green; }
+
+    /* --- NOVO: Botão Cancelar --- */
+    #cancelar {
+      background-color: #6c757d; /* Cinza */
+      margin-top: 5px;
+    }
+    #cancelar:hover {
+      background-color: #5a6268;
+    }
+
+  </style>
+</head>
+<body>
+<h1>Lembrete de Ticket</h1>
+ <h3>Agendar / Editar Lembrete</h3>
+  <input type="text" id="link" placeholder="Cole o link (assunto)">
+  <input type="text" id="ticket" placeholder="Descrição do lembrete">
+  <input type="datetime-local" id="horario">
+  <button id="salvar">Salvar Lembrete</button>
+  
+  <button id="cancelar" style="display: none;">Cancelar Edição</button>
+
+  <hr>
+  <h3>Pendentes</h3>
+  <ul id="lista-tickets">
+    <li>Nenhum lembrete pendente.</li>
+  </ul>
+
+  <script src="popup.js"></script>
+</body>
+</html>
