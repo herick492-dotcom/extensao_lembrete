@@ -1,32 +1,32 @@
 // --- Elementos do DOM ---
 const salvarBtn = document.getElementById("salvar");
 const cancelarBtn = document.getElementById("cancelar"); // Novo
+const salvar1hBtn = document.getElementById("salvar-1h"); // Novo botão
 const linkInput = document.getElementById("link");
 const ticketInput = document.getElementById("ticket");
 const horarioInput = document.getElementById("horario");
 const listaUl = document.getElementById("lista-tickets");
+const somAlertaToggle = document.getElementById("som-alerta-toggle");
 
 // --- Variáveis de Estado ---
 let editingId = null; // Controla se estamos em modo de edição
-const COR_PADRAO = "#FF0000"; // Vermelho (para consistência)
+const COR_BADGE_PENDENTE = "#FFA500"; // Laranja/Amarelo
+const ALARME_PISCA = "PISCAR_BADGE"; // Nome do alarme piscante
 
 // --- Funções Auxiliares ---
 
 /**
- * Converte um timestamp (milisegundos) para o formato YYYY-MM-DDTHH:MM
- * exigido pelo input 'datetime-local'.
+ * Converte um timestamp (milisegundos) para o formato HH:MM
+ * exigido pelo input 'time'.
  */
-function toLocalISOString(timestamp) {
+function timestampToTimeInput(timestamp) {
   const date = new Date(timestamp);
   const pad = (num) => String(num).padStart(2, '0');
   
-  const Y = date.getFullYear();
-  const M = pad(date.getMonth() + 1);
-  const D = pad(date.getDate());
   const h = pad(date.getHours());
   const m = pad(date.getMinutes());
   
-  return `${Y}-${M}-${D}T${h}:${m}`;
+  return `${h}:${m}`;
 }
 
 /**
@@ -48,11 +48,21 @@ function resetForm() {
  * Para o alarme piscante e restaura a contagem no badge.
  */
 async function pararAlarmeERestaurarBadge() {
-  await chrome.alarms.clear("PISCAR_BADGE");
-  
+  // Para o alarme piscante
+  await chrome.alarms.clear(ALARME_PISCA);
+
+  // Restaura a contagem no badge
   const { tickets = [] } = await chrome.storage.local.get("tickets");
-  await chrome.action.setBadgeText({ text: tickets.length > 0 ? String(tickets.length) : "" });
-  await chrome.action.setBadgeBackgroundColor({ color: COR_PADRAO });
+  const total = tickets.length;
+
+  await chrome.action.setBadgeText({ text: total > 0 ? String(total) : "" });
+  await chrome.action.setBadgeBackgroundColor({ color: COR_BADGE_PENDENTE });
+
+  // Envia mensagem para o content script da aba ativa esconder o balão
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab) {
+    chrome.tabs.sendMessage(tab.id, { action: 'hideNotification' });
+  }
 }
 
 /**
@@ -87,8 +97,8 @@ async function carregarTickets() {
       const dataFormatada = new Date(item.horario).toLocaleString("pt-BR", {
         day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
       });
-     
-      
+      horarioElement.textContent = `Lembrete: ${dataFormatada}`;
+
       contentDiv.appendChild(linkElement);
       contentDiv.appendChild(descElement);
       contentDiv.appendChild(horarioElement);
@@ -108,7 +118,8 @@ async function carregarTickets() {
         editingId = item.id;
         linkInput.value = item.link;
         ticketInput.value = item.ticket;
-        horarioInput.value = toLocalISOString(item.horario); // Usa a função auxiliar
+        // *** FUNÇÃO ATUALIZADA AQUI ***
+        horarioInput.value = timestampToTimeInput(item.horario); // Usa a função auxiliar
         
         salvarBtn.textContent = "Atualizar Lembrete";
         cancelarBtn.style.display = "block";
@@ -144,7 +155,22 @@ async function carregarTickets() {
   }
 
   // Garante que o badge seja atualizado sempre que a lista for carregada
-  await pararAlarmeERestaurarBadge();
+}
+
+/**
+ * Função reutilizável para criar um novo lembrete e alarme.
+ */
+async function criarNovoLembrete(link, ticket, dataAlarme) {
+  const { tickets = [] } = await chrome.storage.local.get("tickets");
+  const id = `lembrete_${Date.now()}`;
+  
+  tickets.push({ id, link, ticket, horario: dataAlarme });
+  await chrome.alarms.create(id, { when: dataAlarme });
+  
+  await chrome.storage.local.set({ tickets });
+  
+  resetForm();
+  carregarTickets();
 }
 
 // --- Event Listeners do Formulário ---
@@ -155,21 +181,42 @@ async function carregarTickets() {
 salvarBtn.onclick = async () => {
   const link = linkInput.value;
   const ticket = ticketInput.value;
-  const horario = horarioInput.value;
+  const horario = horarioInput.value; // Agora retorna "HH:MM"
 
   if (!link || !ticket || !horario) {
     alert("Por favor, preencha todos os campos.");
     return; 
   }
 
-  const dataAlarme = new Date(horario).getTime();
+  // *** LÓGICA DE DATA/HORA ATUALIZADA ***
+  // 1. Pega a hora e minuto do input
+  const [horas, minutos] = horario.split(':');
   
-  if (dataAlarme <= Date.now() && !editingId) {
-    alert("Por favor, escolha uma data/hora no futuro.");
+  // 2. Cria um objeto Date com a data de HOJE
+  const dataAlarme = new Date();
+  
+  // 3. Define a hora e minuto do alarme
+  dataAlarme.setHours(horas);
+  dataAlarme.setMinutes(minutos);
+  dataAlarme.setSeconds(0);
+  dataAlarme.setMilliseconds(0);
+
+  const dataAlarmeTimestamp = dataAlarme.getTime();
+  
+  // --- VALIDAÇÕES ---
+  const { tickets = [] } = await chrome.storage.local.get("tickets");
+
+  // *** 1. NOVA VALIDAÇÃO: Checa duplicidade de link (apenas se for um item novo) ***
+  if (!editingId && tickets.some(t => t.link === link)) {
+    alert("Este link já foi salvo como lembrete.");
     return;
   }
-
-  const { tickets = [] } = await chrome.storage.local.get("tickets");
+  
+  // 2. Checa se a data/hora é no futuro (apenas se for um item novo)
+  if (dataAlarmeTimestamp <= Date.now() && !editingId) {
+    alert("Por favor, escolha um horário no futuro.");
+    return;
+  }
   
   if (editingId) {
     // --- LÓGICA DE ATUALIZAÇÃO ---
@@ -179,16 +226,15 @@ salvarBtn.onclick = async () => {
       await chrome.alarms.clear(editingId);
       
       // Atualiza o item
-      tickets[index] = { id: editingId, link, ticket, horario: dataAlarme };
+      tickets[index] = { id: editingId, link, ticket, horario: dataAlarmeTimestamp };
       
       // Cria o novo alarme
-      await chrome.alarms.create(editingId, { when: dataAlarme });
+      await chrome.alarms.create(editingId, { when: dataAlarmeTimestamp });
     }
   } else {
     // --- LÓGICA DE CRIAÇÃO (existente) ---
-    const id = `lembrete_${Date.now()}`;
-    tickets.push({ id, link, ticket, horario: dataAlarme });
-    await chrome.alarms.create(id, { when: dataAlarme });
+    await criarNovoLembrete(link, ticket, dataAlarmeTimestamp);
+    return; // Retorna para evitar chamar resetForm/carregarTickets duas vezes
   }
 
   // Salva a lista (seja nova ou atualizada)
@@ -199,15 +245,66 @@ salvarBtn.onclick = async () => {
 };
 
 /**
+ * Evento de clique do botão "Lembrete em 1h"
+ */
+salvar1hBtn.onclick = async () => {
+  const link = linkInput.value;
+  const ticket = ticketInput.value;
+
+  // Valida apenas os campos de texto
+  if (!link || !ticket) {
+    alert("Por favor, preencha o Link e a Descrição para criar um lembrete rápido.");
+    return;
+  }
+  
+  // *** NOVA VALIDAÇÃO: Checa duplicidade de link ***
+  const { tickets = [] } = await chrome.storage.local.get("tickets");
+  if (tickets.some(t => t.link === link)) {
+    alert("Este link já foi salvo como lembrete.");
+    return;
+  }
+
+  // Calcula o horário para daqui a 1 hora
+  const dataAlarme = new Date();
+  dataAlarme.setHours(dataAlarme.getHours() + 1);
+
+  await criarNovoLembrete(link, ticket, dataAlarme.getTime());
+};
+
+/**
  * Evento de clique do botão "Cancelar Edição"
  */
 cancelarBtn.onclick = () => {
   resetForm(); // Apenas reseta o formulário
 };
 
+/**
+ * Evento de mudança do interruptor de som
+ */
+somAlertaToggle.onchange = async () => {
+  const somAtivo = somAlertaToggle.checked;
+  // Salva a configuração no storage
+  await chrome.storage.local.set({ configuracoes: { somAtivo } });
+};
+
+/**
+ * Carrega as configurações salvas e atualiza a UI.
+ */
+async function carregarConfiguracoes() {
+  // Pega as configurações salvas. O valor padrão para somAtivo é 'true'.
+  const { configuracoes = { somAtivo: true } } = await chrome.storage.local.get("configuracoes");
+  somAlertaToggle.checked = configuracoes.somAtivo;
+}
+
+
 // --- Inicialização do Popup ---
 document.addEventListener("DOMContentLoaded", () => {
-  // 1. Para qualquer alarme piscante e restaura o badge
-  // 2. Carrega a lista de tickets
+  // 1. Carrega as configurações do usuário (ex: som ligado/desligado)
+  carregarConfiguracoes();
+
+  // 2. Para qualquer alarme piscante que esteja ativo e restaura o badge para a contagem
+  pararAlarmeERestaurarBadge();
+
+  // 3. Carrega e exibe a lista de tickets
   carregarTickets();
 });

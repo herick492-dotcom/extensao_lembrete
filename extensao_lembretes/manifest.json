@@ -5,7 +5,9 @@
   "description": "Agenda lembretes e lista tarefas pendentes.",
   "permissions": [
     "storage", 
-    "alarms"
+    "alarms",
+    "offscreen",
+    "tabs"
   ],
   "action": {
     "default_popup": "popup.html", 
@@ -16,5 +18,22 @@
   },
   "icons": {
     "128": "icon.png"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [ "alert.mp3" ],
+      "matches": [ "<all_urls>" ]
+    }
+  ],
+  "offscreen": {
+    "reasons": ["AUDIO_PLAYBACK"],
+    "justification": "Necessário para tocar o som de alerta do lembrete.",
+    "path": "offscreen.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ]
 }
